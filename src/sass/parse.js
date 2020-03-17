@@ -3,10 +3,19 @@
 const Node = require('../node/basic-node');
 const NodeType = require('../node/node-types');
 const TokenType = require('../token-types');
+const debug = require('debug')('gonzales-pe.sass');
 
 let tokens;
 let tokensLength;
 let pos;
+
+/**
+ * Logs a check for a token type.
+ * @param {string|function} msg
+ * @param {number} val
+ */
+const logCheck = (msg, val) =>
+  val && debug(`check match: ${typeof msg === 'function' ? msg() : msg}`);
 
 const contexts = {
   'arguments': () => {
@@ -187,7 +196,7 @@ const contexts = {
 function throwError(i) {
   const ln = tokens[i].ln;
 
-  throw {line: ln, syntax: 'sass'};
+  throw {line: ln, syntax: 'sass', token: tokens[i]};
 }
 
 /**
@@ -428,7 +437,9 @@ function checkArguments(i) {
     else return 0;
   }
 
-  return tokens[start].right - start + 1;
+  const result = tokens[start].right - start + 1;
+  logCheck('Arguments', result);
+  return result;
 }
 
 /**
@@ -500,6 +511,7 @@ function checkArgument(i) {
   else if (l = checkDefault(i)) tokens[i].argument_child = 25;
   else if (l = checkOptional(i)) tokens[i].argument_child = 26;
 
+  logCheck(() => `Argument, type ${tokens[i].argument_child}`, l);
   return l;
 }
 
@@ -601,6 +613,7 @@ function checkAtrule(i) {
   // If token is part of an @-rule, save the rule's length to token:
   tokens[i].atrule_l = l;
 
+  logCheck('Atrule', l);
   return l;
 }
 
@@ -1628,7 +1641,9 @@ function checkConditionalStatement(i) {
   if (l = checkBlock(i)) i += l;
   else return 0;
 
-  return i - start;
+  const result = i - start;
+  logCheck('ConditionalStatement', result);
+  return result;
 }
 
 /**
@@ -1655,7 +1670,9 @@ function getConditionalStatement() {
  * @return {number} Length of the declaration
  */
 function checkDeclaration(i) {
-  return checkDeclaration1(i) || checkDeclaration2(i);
+  const result = checkDeclaration1(i) || checkDeclaration2(i);
+  logCheck('Declaration', result);
+  return result;
 }
 
 /**
@@ -1819,8 +1836,11 @@ function getSingleValueDeclaration() {
 function checkDeclDelim(i) {
   if (i >= tokensLength) return 0;
 
-  return (tokens[i].type === TokenType.Newline ||
-      tokens[i].type === TokenType.Semicolon) ? 1 : 0;
+  const result = (tokens[i].type === TokenType.Newline ||
+                  tokens[i].type === TokenType.Semicolon) ? 1 : 0;
+
+  logCheck('DeclDelim', result);
+  return result;
 }
 
 /**
@@ -1978,6 +1998,7 @@ function checkExtend(i) {
   if (l = checkExtend1(i)) tokens[i].extend_child = 1;
   else if (l = checkExtend2(i)) tokens[i].extend_child = 2;
 
+  logCheck('Extend', l);
   return l;
 }
 
@@ -2302,6 +2323,37 @@ function getIdentOrInterpolation() {
 }
 
 /**
+ * Check if token is an identifier or interpolation with a modern namespace
+ * prefix, e.g. `namespace.nani`
+ * @param {number} i Token's index number
+ * @returns {number}
+ */
+function checkIdentOrInterpolation2(i) {
+  const start = i;
+  let l;
+
+  if (l = checkIdentOrInterpolation(i)) i += l;
+  else return 0;
+
+  let hasNamespace = false;
+
+  // Check for the following `.nani`
+  if (i < tokensLength - 1 &&
+      tokens[i].type === TokenType.FullStop &&
+      (l = checkIdentOrInterpolation(i + 1))) {
+    i += 1 + l;
+    tokens[start].ident_last = i - 1;
+    hasNamespace = true;
+  }
+
+  const result = i - start;
+  logCheck(() => hasNamespace ?
+                 'IdentOrInterpolation2' :
+                 'IdentOrInterpolation (pass through from 2)', result);
+  return result;
+}
+
+/**
  * Check if token is part of `!important` word
  * @param {number} i Token's index number
  * @return {number}
@@ -2361,6 +2413,7 @@ function checkInclude(i) {
   else if (l = checkInclude7(i)) tokens[i].include_type = 7;
   else if (l = checkInclude8(i)) tokens[i].include_type = 8;
 
+  logCheck('Include', l);
   return l;
 }
 
@@ -2400,7 +2453,7 @@ function checkInclude1(i) {
   if (l = checkSC(i)) i += l;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   if (l = checkSC(i)) i += l;
@@ -2459,7 +2512,7 @@ function checkInclude2(i) {
   if (l = checkSC(i)) i += l;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   if (l = checkSC(i)) i += l;
@@ -2511,7 +2564,7 @@ function checkInclude3(i) {
   if (l = checkSC(i)) i += l;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   if (l = checkSC(i)) i += l;
@@ -2559,7 +2612,7 @@ function checkInclude4(i) {
   if (l = checkSC(i)) i += l;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   return i - start;
@@ -2594,7 +2647,7 @@ function checkInclude5(i) {
   if (tokens[i].type === TokenType.PlusSign) i++;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   if (l = checkSC(i)) i += l;
@@ -2646,7 +2699,7 @@ function checkInclude6(i) {
   if (tokens[i].type === TokenType.PlusSign) i++;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   if (l = checkSC(i)) i += l;
@@ -2692,7 +2745,7 @@ function checkInclude7(i) {
   if (tokens[i].type === TokenType.PlusSign) i++;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   if (l = checkSC(i)) i += l;
@@ -2734,7 +2787,7 @@ function checkInclude8(i) {
   if (tokens[i].type === TokenType.PlusSign) i++;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   return i - start;
@@ -2774,7 +2827,7 @@ function checkIncludeWithKeyframes1(i) {
   if (l = checkSC(i)) i += l;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   if (l = checkSC(i)) i += l;
@@ -2826,7 +2879,7 @@ function checkIncludeWithKeyframes2(i) {
   if (tokens[i].type === TokenType.PlusSign) i++;
   else return 0;
 
-  if (l = checkIdentOrInterpolation(i)) i += l;
+  if (l = checkIdentOrInterpolation2(i)) i += l;
   else return 0;
 
   if (l = checkSC(i)) i += l;
@@ -3236,7 +3289,9 @@ function checkLoop(i) {
     else return 0;
   }
 
-  return i - start;
+  const result = i - start;
+  logCheck('Loop', result);
+  return result;
 }
 
 /**
@@ -3276,7 +3331,9 @@ function getLoop() {
  * @return {number} Length of the mixin
  */
 function checkMixin(i) {
-  return checkMixin1(i) || checkMixin2(i);
+  const result = checkMixin1(i) || checkMixin2(i);
+  logCheck('Mixin', result);
+  return result;
 }
 
 /**
@@ -4777,7 +4834,9 @@ function checkRuleset(i) {
   }
   else return 0;
 
-  return i - start;
+  const result = i - start;
+  logCheck('Ruleset', result);
+  return result;
 }
 
 function getRuleset() {
@@ -4895,7 +4954,9 @@ function checkSC(i) {
     if (tokens[i] && tokens[i].type === TokenType.Newline) break;
   }
 
-  return lsc || 0;
+  const result = lsc || 0;
+  logCheck('SC', result);
+  return result;
 }
 
 /**

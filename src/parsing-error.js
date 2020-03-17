@@ -9,6 +9,7 @@ var parserPackage = require('../package.json');
 function ParsingError(e, css) {
   this.line = e.line;
   this.syntax = e.syntax;
+  this.token = e.token;
   this.css_ = css;
 }
 
@@ -33,6 +34,11 @@ ParsingError.prototype = {
    * @type {String}
    */
   syntax: null,
+
+  /**
+   * @type {Object}
+   */
+  token: null,
 
   /**
    * @type {String}
